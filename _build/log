@@ -1,0 +1,6 @@
+# dune init proj SAP_verification
+# OCAMLPARAM: unset
+# Shared cache: disabled
+# Shared cache location: /Users/brianshu/.cache/dune/db
+# Workspace root: /Users/brianshu/workspace/SAP_verification
+# Auto-detected concurrency: 8
