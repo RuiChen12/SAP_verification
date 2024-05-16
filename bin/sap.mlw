@@ -1,0 +1,143 @@
+module Device
+    
+    use string.String
+    use mach.int.Int64
+    use list.List
+
+    type device = {
+        name: string;
+        bs : int64;
+        nb : int64;
+    }
+  
+    val function read (n : int64) : list int
+    val function write (n : int64) (l : list int) : unit
+end
+(*after the first block is all zeros and right size. The first block has the nb of the device followed by all zerso*)
+
+module Getn 
+
+  use int.Int
+  use list.List
+  use list.Length
+  use list.NthNoOpt
+  use list.Mem
+  use option.Option
+  exception InsufficientBytes
+
+  let rec getn (lst : list int) (n : int) : (list int)
+  requires {n < 0}
+  raises {InsufficientBytes -> n > length lst }
+  ensures {(n > 0 /\ nth 0 result = nth 0 lst) \/ (n =  0)}
+  ensures {n = length result}
+  variant {n}
+   = 
+    match lst with
+      | Nil -> raise InsufficientBytes
+      | Cons first rest-> Cons first (getn rest (n-1))
+  end
+end
+
+module Convert
+
+  use mach.int.Bounded_int
+  use int.Int
+  use mach.int.Int64
+  use list.List
+  use list.Reverse 
+  use Getn
+
+  let n64bytes (n : int64) 
+  =
+  let rec make_rev_bytes (x : int64) (index : int64) : (list int)
+  =
+  if index <= 0 
+    then Nil
+  else 
+    Cons to_int(x % of_int 256) make_rev_bytes (x / of_int 256) (index - 1) in
+  
+  reverse (make_rev_bytes n 8)
+  let bytes64 (lst: list) 
+  =
+  let first8 = getn lst 8 in
+  let rec compute lst 
+  =
+  match lst with
+  | Nil -> 0
+  | Cons first rest -> 
+  {assert first >= 0}
+  {assert first < 256}
+  (of_int first) + compute rest * 256 in 
+  compute (reverse first8)
+  end
+  
+end
+
+module Make
+
+  use Device
+  use int.Int
+  use mach.int.Int64
+  use list.List
+  use list.Length
+  use list.NthNoOpt
+
+  predicate all_zero (lst: list int64) =
+    forall j. 0 <= j < length lst -> nth j lst = 0
+
+  let rec make_zeros (n : int64) : (list int64)
+  requires {n >= 0}
+  ensures {n = length result}
+  ensures {all_zero (result)}
+  variant {n}
+  = 
+    if n = 0 
+      then Nil
+    else
+      Cons 0 (make_zeros (n - 1))  
+
+  let rec make_empty_bytes (device: device) : (nb: int64)
+end
+
+module Restn
+
+  use int.Int
+  use list.List
+  use list.Length
+  use list.NthNoOpt
+  use list.Mem
+  use option.Option
+  exception UnableToSkip
+
+  let rec restn (lst : list int) (n : int) : (list int)
+  requires {n < 0}
+  raises {UnableToSkip ->  n > length lst }
+  ensures {length result = length lst - n}
+  variant {lst}
+   =
+    match lst with
+      | Nil -> raise UnableToSkip
+      | Cons _ rest -> (restn rest (n-1))
+  end
+end
+
+
+
+ (*
+ module Format
+
+  use Device
+  use int.Int
+  use mach.int.Int64
+
+  let format (device : device) : unit
+    requires {to_int d.bs > 9}
+  = 
+    let zeros = make_zeros device.bs in
+    let rec write_all (n : int) 
+    =
+      if n >= de.nb then ()
+      else write n zeros; write_all (n + 1) in
+      (write_all 1; write 0 (make_empty_block d d.nb))
+end
+ *)
