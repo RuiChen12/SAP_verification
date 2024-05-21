@@ -46,15 +46,16 @@ if index <= 0 then []
 else (Int64.to_int (Int64.rem x 256L)) ::
 make_rev_bytes (Int64.div x 256L) (index - 1) in
 List.rev (make_rev_bytes n 8)
+
 let bytes64 lst =
 let first8 = getn lst 8 in
 let rec compute lst =    (* lst has the lsb first *)
 match lst with
 | [] -> 0L
 | first :: rest ->
-(assert (first >= 0); assert (first < 256); 
-(Int64.add (Int64.of_int first)
-          (Int64.mul (compute rest) 256L))) in
+(assert (first >= 0);
+assert (first < 256); 
+(Int64.add (Int64.of_int first) (Int64.mul (compute rest) 256L))) in
 compute (List.rev first8)
 
 (* 4. assert bytes64 (n64bytes n) = n for any n < 2^63 *)

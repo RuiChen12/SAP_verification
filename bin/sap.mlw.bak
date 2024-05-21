@@ -32,7 +32,7 @@ module Getn
   variant {n}
    = 
     match lst with
-      | Nil -> Nil
+      | Nil -> []
       | Cons first rest -> Cons first (getn rest (n-1))
   end
 end
