@@ -88,7 +88,38 @@ module Convert
   let bytes64 (lst: list int)
   = compute (getn lst 8)
 end
+(* a different version of n64byte prove*)
+module N64Bytes
 
+  use int.Int
+  use list.List
+  use list.Length
+  use int.ComputerDivision
+
+  let rec reverse_helper (acc: list int) (lst: list int) : list int
+    ensures { length result = length acc + length lst }
+  = match lst with
+    | Nil -> acc
+    | Cons h t -> reverse_helper (Cons h acc) t
+    end
+
+  let reverse (lst: list int) : list int
+    ensures { length result = length lst }
+  = reverse_helper Nil lst
+
+  let rec make_rev_bytes (x: int) (index: int) : list int
+    requires { 0 <= index < 8 }
+    ensures { (index > 0 -> length result = 8) }
+    ensures { (index <= 0 -> length result = 0) }
+  = if index <= 0 then Nil
+    else Cons (mod x 256) (make_rev_bytes (div x 256) (index - 1))
+
+  let n64bytes (n: int) : list int
+    ensures { length result = 8 }
+  = reverse (make_rev_bytes n 8)
+
+
+end
 
 
 (*
