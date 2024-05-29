@@ -89,12 +89,36 @@ module Convert
   = compute (getn lst 8)
 end
 (* a different version of n64byte prove*)
+module Getn 
+
+  use int.Int
+  use list.List
+  use list.Length
+  use list.NthNoOpt
+  use list.Mem
+  use option.Option
+
+  let rec getn (lst : list int) (n : int) : (list int)
+  requires {n < 0}
+  ensures {(n > 0 /\ nth 0 result = nth 0 lst) \/ (n =  0)}
+  ensures {n = length result}
+  variant {n}
+   = 
+    match lst with
+      | Nil -> Nil
+      | Cons first rest -> Cons first (getn rest (n-1))
+  end
+end
+
+
+
 module N64Bytes
 
   use int.Int
   use list.List
   use list.Length
   use int.ComputerDivision
+  use Getn
 
   let rec reverse_helper (acc: list int) (lst: list int) : list int
     ensures { length result = length acc + length lst }
@@ -117,10 +141,24 @@ module N64Bytes
   let n64bytes (n: int) : list int
     ensures { length result = 8 }
   = reverse (make_rev_bytes n 8)
+  
+let rec compute (lst: list int) : int
+    ensures { result >= 0 }
+    variant { lst }
+  = match lst with
+    | Nil -> 0
+    | Cons first rest ->
+       first + compute (rest) * 256
+  end
+
+  let bytes64 (lst: list int) : int
+    requires { length lst >= 8 }
+    ensures { result >= 0 }
+  = let first8 = getn lst 8 in
+    compute (reverse first8)
 
 
 end
-
 
 (*
 
