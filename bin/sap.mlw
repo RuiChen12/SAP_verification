@@ -101,19 +101,24 @@ module N64Bytes
   let n64bytes (n: int64) : list int
     requires { n >= 0 }
     ensures { length result = 8 }
-    ensures { forall i: int. 0 <= i < 8 -> 0 <= nth i result < 256 }
   = let rev_bytes = make_rev_bytes n 8 in
     reverse rev_bytes
 
   (* Recursive function to compute a 64-bit integer from a list of bytes *)
-  let rec compute (lst: list int) : int64
+let rec compute (lst: list int) : int64
+    requires { forall i: int. 0 <= i < length lst -> 0 <= nth i lst < 256 }
     ensures { result >= 0 }
     variant { length lst }
   = match lst with
     | Nil -> Int64.of_int 0
     | Cons first rest ->
-      (assert { 0 <= first < 256 };
-       (Int64.of_int first) + ((compute rest) * (Int64.of_int 256)))
+      assert { 0 <= first < 256 };
+      let first_value = Int64.of_int first in
+      let rest_value = compute rest in
+      assert { rest_value >= 0 };
+      let combined_value = first_value + (rest_value * (Int64.of_int 256)) in
+      assert { combined_value >= 0 };
+      combined_value
   end
 
   (* Main function to convert a list of bytes to a 64-bit integer *)
