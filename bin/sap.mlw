@@ -26,14 +26,15 @@ module Getn
   use option.Option
 
   let rec getn (lst : list int) (n : int) : (list int)
-  requires {n < 0}
-  ensures {(n > 0 /\ nth 0 result = nth 0 lst) \/ (n =  0)}
-  ensures {n = length result}
-  variant {n}
+    requires { 0 <= n <= length lst }
+    ensures { length result = n }
+    ensures { n > 0 -> nth 0 result = nth 0 lst }
+    ensures { n = 0 -> result = Nil }
+    variant { n }
    = 
     match lst with
       | Nil -> Nil
-      | Cons first rest -> Cons first (getn rest (n-1))
+      | Cons first rest -> if n = 0 then Nil else Cons first (getn rest (n-1))
   end
 end
 
@@ -48,14 +49,15 @@ module Restn
   exception UnableToSkip
 
   let rec restn (lst : list int) (n : int) : (list int)
-  requires {n < 0}
-  raises {UnableToSkip ->  n > length lst }
-  ensures {length result = length lst - n}
-  variant {lst}
+    requires { 0 <= n }
+    raises { UnableToSkip -> n > length lst }
+    ensures { length lst >= n -> length result = length lst - n }
+    ensures { length lst < n -> false }
+    variant { n }
    =
     match lst with
       | Nil -> raise UnableToSkip
-      | Cons _ rest -> (restn rest (n-1))
+      | Cons _ rest -> if n = 0 then lst else restn rest (n-1)
   end
 end
 
@@ -89,69 +91,53 @@ module Convert
   = compute (getn lst 8)
 end
 (* a different version of n64byte prove*)
-module Getn 
-
-  use int.Int
-  use list.List
-  use list.Length
-  use list.NthNoOpt
-  use list.Mem
-  use option.Option
-
-  let rec getn (lst : list int) (n : int) : (list int)
-  requires {n < 0}
-  ensures {(n > 0 /\ nth 0 result = nth 0 lst) \/ (n =  0)}
-  ensures {n = length result}
-  variant {n}
-   = 
-    match lst with
-      | Nil -> Nil
-      | Cons first rest -> Cons first (getn rest (n-1))
-  end
-end
-
-
 
 module N64Bytes
 
   use int.Int
+  use mach.int.Int64
   use list.List
   use list.Length
   use int.ComputerDivision
   use Getn
 
+  (* Helper function to reverse a list *)
   let rec reverse_helper (acc: list int) (lst: list int) : list int
     ensures { length result = length acc + length lst }
+    variant { length lst }
   = match lst with
     | Nil -> acc
     | Cons h t -> reverse_helper (Cons h acc) t
-    end
+  end
 
   let reverse (lst: list int) : list int
     ensures { length result = length lst }
   = reverse_helper Nil lst
 
-  let rec make_rev_bytes (x: int) (index: int) : list int
-    requires { 0 <= index < 8 }
-    ensures { (index > 0 -> length result = 8) }
-    ensures { (index <= 0 -> length result = 0) }
+  (* Function to convert a 64-bit integer to a list of bytes *)
+  let rec make_rev_bytes (x: int64) (index: int) : list int
+    requires { 0 <= index <= 8 }
+    ensures { length result = index }
   = if index <= 0 then Nil
-    else Cons (mod x 256) (make_rev_bytes (div x 256) (index - 1))
+    else Cons (to_int (x % (Int64.of_int 256))) (make_rev_bytes (x / (Int64.of_int 256)) (index - 1))
 
-  let n64bytes (n: int) : list int
+  let n64bytes (n: int64) : list int
     ensures { length result = 8 }
   = reverse (make_rev_bytes n 8)
-  
-let rec compute (lst: list int) : int
+
+  (* Recursive function to compute a 64-bit integer from a list of bytes *)
+  let rec compute (lst: list int) : int64
     ensures { result >= 0 }
-    variant { lst }
+    variant { length lst }
   = match lst with
-    | Nil -> 0
+    | Nil -> Int64.of_int 0
     | Cons first rest ->
-       first + compute (rest) * 256
+      (assert { 0 <= first < 256 };
+       (Int64.of_int first) + ((compute rest) * (Int64.of_int 256)))
   end
 
-  let bytes64 (lst: list int) : int
+  (* Main function to convert a list of bytes to a 64-bit integer *)
+  let bytes64 (lst: list int) : int64
     requires { length lst >= 8 }
     ensures { result >= 0 }
   = let first8 = getn lst 8 in
@@ -160,9 +146,8 @@ let rec compute (lst: list int) : int
 
 end
 
-(*
 
-module Make
+(*module Make
 
   use Device
   use int.Int
@@ -170,6 +155,7 @@ module Make
   use list.List
   use list.Length
   use list.NthNoOpt
+  use N64Bytes
 
   predicate all_zero (lst: list int64) =
     forall j. 0 <= j < length lst -> nth j lst = 0
@@ -184,9 +170,13 @@ module Make
       then Nil
     else
       Cons 0 (make_zeros (n - 1))  
-end
+    let rec make_empty_bytes (device: device) (nb: int) : list int
+  variant { nb }
+= n64bytes nb + (make_zeros (device.bs - 8))
+end*)
 
-module Internal
+
+(*module Internal
   use Device
   use mach.int.Int64
   let get_header (d:device) (int:bn) = 
@@ -206,5 +196,4 @@ end
       if n >= de.nb then ()
       else write n zeros; write_all (n + 1) in
       (write_all 1; write 0 (make_empty_block d d.nb))
-end
- *)
+end*)
