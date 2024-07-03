@@ -43,54 +43,23 @@ module Restn
   use int.Int
   use list.List
   use list.Length
-  use list.NthNoOpt
-  use list.Mem
   use option.Option
   exception UnableToSkip
 
-  let rec restn (lst : list int) (n : int) : (list int)
+  let rec restn (lst : list int) (n : int) : list int
     requires { 0 <= n }
     raises { UnableToSkip -> n > length lst }
-    ensures { length lst >= n -> length result = length lst - n }
-    ensures { length lst < n -> false }
+    ensures { n <= length lst -> length result = length lst - n }
+    ensures { n > length lst -> false }
     variant { n }
-   =
-    match lst with
+  = 
+    if n <= 0 then lst
+    else match lst with
       | Nil -> raise UnableToSkip
-      | Cons _ rest -> if n = 0 then lst else restn rest (n-1)
+      | Cons _ rest -> restn rest (n - 1)
   end
 end
 
-module Convert
-
-  use int.Int
-  use int.ComputerDivision
-  use list.List
-  use list.Reverse 
-  use Getn
-
-  let rec make_rev_bytes (x : int) (index : int) : (list int)
-  = 
-    if index <= 0 
-      then Nil
-    else 
-      Cons (mod x 256) (make_rev_bytes(div x 256) (index - 1)) 
-
-  let n64bytes (n : int) : (list int)
-  = 
-    reverse (make_rev_bytes n 8)
-  
-  let rec compute (lst: list int) : (int)
-  variant {lst}
-  = match lst with
-    | Nil -> 0
-    | Cons first rest -> first + compute(rest) * 256
-    end
-
-  let bytes64 (lst: list int)
-  = compute (getn lst 8)
-end
-(* a different version of n64byte prove*)
 
 module N64Bytes
 
@@ -100,6 +69,9 @@ module N64Bytes
   use list.Length
   use int.ComputerDivision
   use Getn
+  use list.NthNoOpt
+  use list.Mem
+  use option.Option
 
   (* Helper function to reverse a list *)
   let rec reverse_helper (acc: list int) (lst: list int) : list int
@@ -117,13 +89,21 @@ module N64Bytes
   (* Function to convert a 64-bit integer to a list of bytes *)
   let rec make_rev_bytes (x: int64) (index: int) : list int
     requires { 0 <= index <= 8 }
+    requires { x >= 0 }
     ensures { length result = index }
+    ensures { forall i: int. 0 <= i < index -> 0 <= nth i result < 256 }
+    variant { index }
   = if index <= 0 then Nil
-    else Cons (to_int (x % (Int64.of_int 256))) (make_rev_bytes (x / (Int64.of_int 256)) (index - 1))
+    else
+      let byte = to_int (x % (Int64.of_int 256)) in
+      Cons byte (make_rev_bytes (x / (Int64.of_int 256)) (index - 1))
 
   let n64bytes (n: int64) : list int
+    requires { n >= 0 }
     ensures { length result = 8 }
-  = reverse (make_rev_bytes n 8)
+    ensures { forall i: int. 0 <= i < 8 -> 0 <= nth i result < 256 }
+  = let rev_bytes = make_rev_bytes n 8 in
+    reverse rev_bytes
 
   (* Recursive function to compute a 64-bit integer from a list of bytes *)
   let rec compute (lst: list int) : int64
