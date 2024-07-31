@@ -1,1 +1,191 @@
+module Device
+    
+    use string.String
+    use int.Int
+    use list.List
+
+    type device = {
+        name: string;
+        bs : int;
+        nb : int;
+    }
+  
+    val function read (n : int) : list int
+    val function write (n : int) (l : list int) : unit
+end
+(*after the first block is all zeros and right size. The first block has the nb of the device followed by all zeros*)
+
+module Getn 
+
+  use int.Int
+  use list.List
+  use list.Length
+  use list.NthNoOpt
+  use list.Mem
+  use option.Option
+
+  let rec getn (lst : list int) (n : int) : (list int)
+    requires { 0 <= n <= length lst }
+    ensures { length result = n }
+    ensures { n > 0 -> nth 0 result = nth 0 lst }
+    ensures { n = 0 -> result = Nil }
+    variant { n }
+   = 
+    match lst with
+      | Nil -> Nil
+      | Cons first rest -> if n = 0 then Nil else Cons first (getn rest (n-1))
+  end
+end
+
+module Restn
+
+  use int.Int
+  use list.List
+  use list.Length
+  use option.Option
+  exception UnableToSkip
+
+  let rec restn (lst : list int) (n : int) : list int
+    requires { 0 <= n }
+    raises { UnableToSkip -> n > length lst }
+    ensures { n <= length lst -> length result = length lst - n }
+    ensures { n > length lst -> false }
+    variant { n }
+  = 
+    if n <= 0 then lst
+    else match lst with
+      | Nil -> raise UnableToSkip
+      | Cons _ rest -> restn rest (n - 1)
+  end
+end
+
+
+module N64Bytes
+
+  use int.Int
+  use list.List
+  use list.Length
+  use int.ComputerDivision
+  use Getn
+  use list.NthNoOpt
+  use list.Mem
+  use option.Option
+
+  (* Helper function to reverse a list *)
+  let rec reverse_helper (acc: list int) (lst: list int) : list int
+    ensures { length result = length acc + length lst }
+    ensures { forall i. 0 <= i < length acc -> nth i acc = nth i result }
+    ensures { forall i. 0 <= i < length lst -> nth i lst = nth (length acc + length lst - 1 - i) result }
+    variant { length lst }
+  = match lst with
+    | Nil -> acc
+    | Cons h t ->
+      let new_acc = Cons h acc in
+      assert { length new_acc = length acc + 1 };
+      reverse_helper new_acc t
+  end
+
+  let reverse (lst: list int) : list int
+    ensures { length result = length lst }
+  = reverse_helper Nil lst
+
+  (* Function to convert an integer to a list of bytes *)
+  let rec make_rev_bytes (x: int) (index: int) : list int
+    requires { 0 <= index <= 8 }
+    requires { x >= 0 }
+    ensures { length result = index }
+    ensures { forall i: int. 0 <= i < index -> 0 <= nth i result <= 256 }
+    variant { index }
+  = if index <= 0 then Nil
+    else
+      let byte = mod x 256 in
+      Cons byte (make_rev_bytes (div x 256) (index - 1))
+
+  let n64bytes (n: int) : list int
+    requires { n >= 0 }
+    ensures { length result = 8 }
+  = let rev_bytes = make_rev_bytes n 8 in
+    reverse rev_bytes
+    
+  let rec validate_bytes (lst: list int) : bool
+    ensures { result = true <-> (forall i. mem i lst -> 0 <= i < 256) }
+    variant { lst }
+  = match lst with
+    | Nil -> true
+    | Cons h t -> (0 <= h < 256) && validate_bytes t
+  end
+  
+  
+  let rec compute (lst: list int) : int
+    requires { length lst <= 8 }
+    requires { forall i. 0 <= i < length lst -> 0 <= nth i lst < 256 }
+    ensures { result >= 0 }
+    variant { length lst }
+  = match lst with
+    | Nil -> 0
+    | Cons first rest ->
+      assert { first >= 0 };
+      assert { first < 256 };
+      let rest_value = compute rest in
+      assert { rest_value >= 0 };
+      let combined_value = first + (rest_value * 256) in
+      assert { combined_value >= 0 };
+      combined_value
+  end
+
+  (* Main function to convert a list of bytes to an integer *)
+  let bytes64 (lst: list int) : int
+    requires { length lst >= 8 }
+    requires { forall i. 0 <= i < length lst -> 0 <= nth i lst < 256 }
+    ensures { result >= 0 }
+  = let first8 = getn lst 8 in
+    compute (reverse first8)
+end
+
+module Make
+
+  use Device
+  use int.Int
+  use list.List
+  use list.Length
+  use list.NthNoOpt
+  use N64Bytes
+  use list.ListRich
+  use option.Option
+  use list.Append
+  use int.ComputerDivision
+
+  (* Function to create a list of zeros of length n *)
+  let rec make_zeros (n : int) : list int
+    requires { n >= 0 }
+    ensures { length result = n }
+    ensures { forall j. 0 <= j < n -> nth j result = Some 0 }
+    variant { n }
+  = if n = 0 then
+      Nil
+    else
+      Cons 0 (make_zeros (n - 1))
+
+  let make_empty_bytes (device : device) (nb : int) : list int
+    requires { device.bs >= 8 }
+    requires { nb >= 0 }
+    ensures { length result = device.bs }
+    ensures { forall j. 0 <= j < 8 -> nth j result <> None }
+    ensures { forall j. 8 <= j < length result -> nth j result = Some 0 }
+  = let n64bytes_list = n64bytes nb in
+    let zeros = make_zeros (device.bs - 8) in
+    n64bytes_list ++ zeros
+
+  (* Function to create an empty block for a given device and nb *)
+  let rec make_empty_block (device : device) (nb : int) : list int
+    requires { device.bs >= 8 }
+    requires { nb >= 0 }
+    ensures { length result = nb * device.bs }
+    ensures { forall j. 0 <= j < (nb * device.bs) -> nth j result <> None }
+    variant { nb }
+  = if nb = 0 then
+      Nil
+    else
+      make_empty_bytes device nb ++ make_empty_block device (nb - 1)
+  end
 
